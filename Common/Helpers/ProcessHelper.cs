@@ -9,6 +9,8 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Management;
+using System.Text.RegularExpressions;
+using System.Windows;
 
 namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
 {
@@ -221,13 +223,13 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
         {
             if (previousCache == null)
             {
-                using (var searcher = new ManagementObjectSearcher("SELECT ProcessId, Name, ExecutablePath FROM Win32_Process"))
+                using (var searcher = new ManagementObjectSearcher("SELECT ProcessId, Name, ExecutablePath, CommandLine FROM Win32_Process"))
                 {
                     using (var results = searcher.Get())
                     {
                         previousCache = results.Cast<ManagementObject>()
-                                               .ToDictionary(r => (int)(uint)r["ProcessId"], 
-                                                             r => new[] { (string)r["Name"], (string)r["ExecutablePath"] });
+                                               .ToDictionary(r => (int)(uint)r["ProcessId"],
+                                                             r => new[] { (string)r["Name"], (string)r["ExecutablePath"], (string)r["CommandLine"] });
                     }
                 }
             }
@@ -461,6 +463,48 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             return;
         }
 
+        public class ServiceInfoResult
+        {
+            public int ProcessId { get; set; }
+            public string Name { get; set; }
+            public string DisplayName { get; set; }
+            public string PathName { get; set; }
+        }
+        /// <summary>
+        /// Retrieve information about all services by pid
+        /// </summary>
+        /// <returns></returns>
+        public static Dictionary<int, ServiceInfoResult> GetAllServicesByPidWMI()
+        {
+            // use WMI "Win32_Service" query to get service names by pid
+            // https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/win32-service
+            Dictionary<int, ServiceInfoResult> dict = new Dictionary<int, ServiceInfoResult>();
+            using (var searcher = new ManagementObjectSearcher("SELECT ProcessId, Name, DisplayName, PathName FROM Win32_Service WHERE ProcessId != 0"))
+            {
+                using (var results = searcher.Get())
+                {
+                    foreach (var r in results)
+                    {
+                        //Console.WriteLine($"{r["processId"]} {r["Name"]}");
+                        int pid = (int)(uint)r["ProcessId"];
+                        if (pid > 0 && !dict.ContainsKey(pid))
+                        {
+                            ServiceInfoResult si = new ServiceInfoResult()
+                            {
+                                ProcessId = pid,
+                                Name = (string)r["Name"],
+                                DisplayName = (string)r["DisplayName"],
+                                PathName = (string)r["PathName"]
+                            };
+                            dict.Add(pid, si);
+                        }
+                    }
+
+                }
+            }
+            return dict;
+        }
+
         /// <summary>
         /// 
         /// </summary>
@@ -562,7 +606,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             IntPtr hProcess = OpenProcess(ProcessHelper.ProcessAccessFlags.QueryInformation, false, (uint)pid);
             if (hProcess == IntPtr.Zero)
             {
-                LogHelper.Warning("Unable to retrieve process local user owner: process cannot be found!");
+                LogHelper.Warning($"Unable to retrieve process local user owner: process pid={pid} cannot be found!");
                 return String.Empty;
             }
             try
@@ -570,7 +614,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
                 IntPtr hToken;
                 if (OpenProcessToken(hProcess, TOKEN_QUERY, out hToken) == false)
                 {
-                    LogHelper.Warning("Unable to retrieve process local user owner: process cannot be opened!");
+                    LogHelper.Warning("Unable to retrieve process local user owner: process pid={pid} cannot be opened!");
                     return String.Empty;
                 }
                 try
@@ -689,10 +733,168 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             }
             catch (Exception e)
             {
-                LogHelper.Error("Unable to parse the parameters: key = "+ key + " argv = " + String.Join(" ", args), e);
+                LogHelper.Error("Unable to parse the parameters: key = " + key + " argv = " + String.Join(" ", args), e);
             }
 
             return ret;
         }
+
+        /// <summary>
+        /// Get the command-line of a running process id.<br>Use parseCommandLine to parse it into list of arguments</br>
+        /// </summary>
+        /// <param name="processId"></param>
+        /// <returns>command-line or null</returns>
+        public static String getCommandLineFromProcessWMI(int processId)
+        {
+            try
+            {
+                using (ManagementObjectSearcher clSearcher = new ManagementObjectSearcher(
+                    "SELECT CommandLine FROM Win32_Process WHERE ProcessId = " + processId))
+                {
+                    String cLine = "";
+                    foreach (ManagementObject mObj in clSearcher.Get())
+                    {
+                        cLine += (String)mObj["CommandLine"];
+                    }
+                    return cLine;
+                }
+            }
+            catch (Exception e)
+            {
+                LogHelper.Error("Unable to get command-line from processId: " + processId + " - is process running?", e);
+            }
+            return null;
+        }
+        /// <summary>
+        /// Parses a complete command-line with arguments provided as a string (support commands spaces and quotes).
+        /// <para>Special keys in dictionary
+        /// <br>key=@command  contains the command itself</br>
+        /// <br>key=@arg[x] for args wihtout argname</br>
+        /// </para>
+        /// </summary>
+        /// 
+        /// <param name="cmdLine">command-line to parse e.g. "\"c:\\program files\\svchost.exe\" -k -s svcName -t \"some text\""</param>
+        /// <returns>Dictionary with key-value pairs.<para>
+        /// key=@command contains the command itself</para>
+        /// <para>key=@arg[x] for args without key</para>
+        /// <para>[-argname|/aname]</para>
+        /// </returns>
+        public static Dictionary<string, string> ParseCommandLineArgs(string cmdLine)
+        {
+            // https://stackoverflow.com/questions/298830/split-string-containing-command-line-parameters-into-string-in-c-sharp
+            // Fiddle link (regex): https://dotnetfiddle.net/PU7kXD
+
+            string regEx = @"\G(""((""""|[^""])+)""|(\S+)) *";
+            MatchCollection matches = Regex.Matches(cmdLine, regEx);
+            List<String> args = matches.Cast<Match>().Select(m => Regex.Replace(m.Groups[2].Success ? m.Groups[2].Value : m.Groups[4].Value, @"""""", @"""")).ToList();
+            return ParseCommandLineArgsToDict(args);
+        }
+
+        /// <summary>
+        /// Creates a dictionary from a command-line arguments list.
+        /// <para>Special keys in dictionary
+        /// <br>key=@command  contains the command itself from the first element in the list</br>
+        /// <br>key=@arg[x] for args wihtout argname</br>
+        /// </para>
+        /// </summary>
+        /// 
+        public static Dictionary<string, string> ParseCommandLineArgsToDict(List<String> args)
+        {
+            // Fiddle link to test it: https://dotnetfiddle.net/PU7kXD
+            Dictionary<string, string> dict = new Dictionary<string, string>(args.Count);
+            for (int i = 0; i < args.Count(); i++)
+            {
+                string key, val;
+                if (args[i].StartsWith("-") || args[i].StartsWith("/"))
+                {
+                    key = args[i];
+                    if ((i + 1) < args.Count && !args[i + 1].StartsWith("-") && !args[i + 1].StartsWith("/"))
+                    {
+                        val = args[i + 1];
+                        i++;
+                    }
+                    else
+                    {
+                        val = null;
+                    }
+                }
+                else
+                {
+                    // key=@command@ or argX 
+                    key = (i == 0) ? "@command" : "@arg" + i;
+                    val = args[i];
+                }
+                dict.Add(key, val);
+            }
+
+            return dict;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool ShowWindow(IntPtr hWnd, ShowWindowEnum flags);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern int SetForegroundWindow(IntPtr hwnd);
+
+        private enum ShowWindowEnum
+        {
+            Hide = 0,
+            ShowNormal = 1, ShowMinimized = 2, ShowMaximized = 3,
+            Maximize = 3, ShowNormalNoActivate = 4, Show = 5,
+            Minimize = 6, ShowMinNoActivate = 7, ShowNoActivate = 8,
+            Restore = 9, ShowDefault = 10, ForceMinimized = 11
+        };
+
+        /**
+         * Finds the process by name and sets the main window to the foreground.
+         */
+        public static void RestoreProcessWindowState(string processName)
+        {
+            // get the process
+            Process bProcess = Process.GetProcessesByName(processName).FirstOrDefault();
+
+            // check if the process is running
+            if (bProcess != null)
+            {
+                // check if the window is hidden / minimized
+                if (bProcess.MainWindowHandle == IntPtr.Zero)
+                {
+                    // the window is hidden so try to restore it before setting focus.
+                    ShowWindow(bProcess.Handle, ShowWindowEnum.Restore);
+                }
+
+                // set user the focus to the window
+                SetForegroundWindow(bProcess.MainWindowHandle);
+            }
+            else
+            {
+                // the process is not running, so start it
+                Process.Start(processName);
+            }
+        }
+
+        /**
+         * Starts a default shell executable (netcore31) with arguments and optional message box.
+         * 
+         */
+        public static void StartShellExecutable(string executable, string args, bool showMessageBox)
+        {
+            try
+            {
+                LogHelper.Debug($"Starting shell executable: {executable}, args: {args}"); 
+                Process.Start(new ProcessStartInfo(executable, args) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"{ex.Message}: {executable} {args}", ex);
+                if (showMessageBox)
+                {
+                    MessageBox.Show($"Cannot start shell program: {executable}, Message: {ex.Message}");
+                }
+            }
+        }
     }
+
 }
+

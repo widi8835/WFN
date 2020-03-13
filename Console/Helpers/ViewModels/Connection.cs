@@ -1,30 +1,20 @@
 ﻿using System;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Windows.Media.Imaging;
 using Wokhan.WindowsFirewallNotifier.Common.Helpers;
-using System.Linq;
 using System.Collections.Generic;
+using Wokhan.WindowsFirewallNotifier.Common.Net.Dns;
+using Wokhan.Core.ComponentModel;
+using Wokhan.ComponentModel.Extensions;
 
 namespace Wokhan.WindowsFirewallNotifier.Console.Helpers.ViewModels
 {
-    public class Connection : INotifyPropertyChanged
+    public class Connection : NotifierHelper
     {
-        public event PropertyChangedEventHandler PropertyChanged;
-
         /// <summary>
         /// Uses a cache for WMI information to avoid per-process costly queries.
         /// Warning: it has to be reset to null every time a new batch of processes will be handled, since it's not dynamically self-refreshed.
         /// </summary>
         public static Dictionary<int, string[]> LocalOwnerWMICache = null;
-
-        protected void NotifyPropertyChanged(string propertyName)
-        {
-            if (PropertyChanged != null)
-            {
-                PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
-            }
-        }
 
         public Connection(IPHelper.I_OWNER_MODULE ownerMod)
         {
@@ -59,18 +49,17 @@ namespace Wokhan.WindowsFirewallNotifier.Console.Helpers.ViewModels
                     ProcName = "System";
                     Owner = "System";
                     Path = "System";
-                    Icon = IconHelper.GetIcon("System", true);
                 }
                 else
                 {
                     Owner = "Unknown";
-                    Icon = IconHelper.GetIcon("?error", true);
+                    Path = Path ?? "Unresolved";
                 }
             }
             else
             {
-                Icon = ownerMod.OwnerModule.Icon;
                 Owner = ownerMod.OwnerModule.ModuleName;
+                IconPath = ownerMod.OwnerModule.ModulePath;
             }
 
             GroupKey = String.Format("{0} ({1}) - [{2}]", ProcName, Path, PID);
@@ -79,33 +68,49 @@ namespace Wokhan.WindowsFirewallNotifier.Console.Helpers.ViewModels
         private bool _isAccessDenied;
         public bool IsAccessDenied
         {
-            get { return _isAccessDenied; }
-            set { _isAccessDenied = value; NotifyPropertyChanged("IsAccessDenied"); }
+            get => _isAccessDenied;
+            set => this.SetValue(ref _isAccessDenied, value, NotifyPropertyChanged);
         }
 
         private bool _isSelected;
         public bool IsSelected
         {
-            get { return _isSelected; }
-            set { _isSelected = value; NotifyPropertyChanged("IsSelected"); }
+            get => _isSelected;
+            set => this.SetValue(ref _isSelected, value, NotifyPropertyChanged);
         }
 
         private bool _isDead;
         public bool IsDead
         {
-            get { return _isDead; }
-            set { _isDead = value; NotifyPropertyChanged("IsDead"); }
+            get => _isDead;
+            set => this.SetValue(ref _isDead, value, NotifyPropertyChanged);
         }
 
         private string _lastError;
         public string LastError
         {
-            get { return _lastError; }
-            set { _lastError = value; NotifyPropertyChanged("LastError"); }
+            get => _lastError;
+            set => this.SetValue(ref _lastError, value, NotifyPropertyChanged);
         }
 
         public string GroupKey { get; private set; }
-        public BitmapSource Icon { get; private set; }
+
+        private BitmapSource _icon;
+        public BitmapSource Icon
+        {
+            get
+            {
+                if (_icon == null) UpdateIcon();
+                return _icon;
+            }
+            private set => this.SetValue(ref _icon, value, NotifyPropertyChanged);
+        }
+
+        private async void UpdateIcon()
+        {
+            Icon = await IconHelper.GetIconAsync(IconPath ?? Path).ConfigureAwait(false);
+        }
+
         public uint PID { get; private set; }
         public string ProcName { get; private set; }
         public string Path { get; private set; }
@@ -117,7 +122,7 @@ namespace Wokhan.WindowsFirewallNotifier.Console.Helpers.ViewModels
             //lvi.Protocol = b.Protocol;
             if (this.RemoteAddress != b.RemoteAddress)
             {
-                this.RemoteAddress = b.RemoteAddress;
+                DnsResolver.ResolveIpAddress(this._remoteAddress, entry => RemoteHostName = entry.DisplayText);
             }
 
             var newPort = (b.RemotePort == -1 ? String.Empty : b.RemotePort.ToString());
@@ -138,46 +143,72 @@ namespace Wokhan.WindowsFirewallNotifier.Console.Helpers.ViewModels
         private string _protocol;
         public string Protocol
         {
-            get { return _protocol; }
-            set { _protocol = value; NotifyPropertyChanged("Protocol"); }
+            get => _protocol;
+            set => this.SetValue(ref _protocol, value, NotifyPropertyChanged);
         }
 
         private string _state;
         public string State
         {
-            get { return _state; }
-            set { _state = value; NotifyPropertyChanged("State"); }
+            get => _state;
+            set => this.SetValue(ref _state, value, NotifyPropertyChanged);
         }
 
         private string _localAddress;
         public string LocalAddress
         {
-            get { return _localAddress; }
-            set { _localAddress = value; NotifyPropertyChanged("LocalAddress"); }
+            get => _localAddress;
+            set => this.SetValue(ref _localAddress, value, NotifyPropertyChanged);
         }
+
+        private string _localHostName;
+        public string LocalHostName
+        {
+            get
+            {
+                if (_localHostName == null)
+                    DnsResolver.ResolveIpAddress(_localAddress, entry => LocalHostName = entry.DisplayText);
+                return _localHostName;
+            }
+            set => this.SetValue(ref _localHostName, value, NotifyPropertyChanged);
+        }
+
 
         private string _localPort;
         public string LocalPort
         {
-            get { return _localPort; }
-            set { _localPort = value; NotifyPropertyChanged("LocalPort"); }
+            get => _localPort;
+            set => this.SetValue(ref _localPort, value, NotifyPropertyChanged);
         }
 
         private string _remoteAddress;
         public string RemoteAddress
         {
-            get { return _remoteAddress; }
-            set { _remoteAddress = value; NotifyPropertyChanged("RemoteAddress"); }
+            get => _remoteAddress;
+            set => this.SetValue(ref _remoteAddress, value, NotifyPropertyChanged);
+        }
+
+        private string _remoteHostName;
+        public string RemoteHostName
+        {
+            get
+            {
+                if (_remoteHostName == null)
+                    DnsResolver.ResolveIpAddress(_remoteAddress, entry => RemoteHostName = entry.DisplayText);
+                return _remoteHostName;
+            }
+            set => this.SetValue(ref _remoteHostName, value, NotifyPropertyChanged);
         }
 
         private string _remotePort;
         public string RemotePort
         {
             get { return _remotePort; }
-            set { _remotePort = value; NotifyPropertyChanged("RemotePort"); }
+            set { this.SetValue(ref _remotePort, value, NotifyPropertyChanged); }
         }
 
         public string Owner { get; private set; }
+        public string IconPath { get; }
         public DateTime? CreationTime { get; set; }
 
         public DateTime LastSeen { get; set; }
@@ -185,15 +216,15 @@ namespace Wokhan.WindowsFirewallNotifier.Console.Helpers.ViewModels
         private bool _isDying;
         public bool IsDying
         {
-            get { return _isDying; }
-            set { _isDying = value; NotifyPropertyChanged("IsDying"); }
+            get => _isDying;
+            set => this.SetValue(ref _isDying, value, NotifyPropertyChanged);
         }
 
         private bool _isNew;
         public bool IsNew
         {
-            get { return _isNew; }
-            set { _isNew = value; NotifyPropertyChanged("IsNew"); }
+            get => _isNew;
+            set => this.SetValue(ref _isNew, value, NotifyPropertyChanged);
         }
     }
 }

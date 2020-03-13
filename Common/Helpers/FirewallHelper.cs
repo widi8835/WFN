@@ -3,14 +3,20 @@ using NetFwTypeLib;
 using System.Linq;
 using Microsoft.Win32;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Text;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Windows.Media;
+using Wokhan.WindowsFirewallNotifier.Common.Annotations;
 using Wokhan.WindowsFirewallNotifier.Common.Properties;
+using Wokhan.WindowsFirewallNotifier.Common.Extensions;
+using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
 {
-    public class FirewallHelper
+    public static class FirewallHelper
     {
         //[DllImport("user32.dll", SetLastError = true)]
         //private static extern int LoadString(IntPtr hInstance, uint uID, StringBuilder lpBuffer, int nBufferMax);
@@ -31,54 +37,70 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
         private const string indParamFormat = "{0}#$#{1}#$#{2}#$#{3}#$#{4}#$#{5}#$#{6}#$#{7}#$#{8}#$#{9}#$#{10}";
         private static string WFNRuleManagerEXE = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "RuleManager.exe");
 
-        public abstract class Rule
+        public abstract class Rule : INotifyPropertyChanged
         {
-            public abstract NET_FW_ACTION_ Action { get; }
-            public abstract string ApplicationName { get; }
+            //Based on [MS-FASP] FW_RULE:
+            public abstract string Name { get; }
             public abstract string Description { get; }
+            public abstract int Profiles { get; }
             public abstract NET_FW_RULE_DIRECTION_ Direction { get; }
-            public abstract bool EdgeTraversal { get; }
-            public abstract bool Enabled { get; } //Active
-            public abstract string Grouping { get; }
-            public abstract string IcmpTypesAndCodes { get; }
+            public abstract int Protocol { get; }
+            public abstract string LocalPorts { get; } //(Protocol 6, 17)
+            public abstract string RemotePorts { get; } //(Protocol 6, 17)
+            public abstract string IcmpTypesAndCodes { get; } //(Protocol 1, 58)
+            public abstract string LocalAddresses { get; }
+            public abstract string RemoteAddresses { get; }
             public abstract object Interfaces { get; }
             public abstract string InterfaceTypes { get; }
-            public abstract string LocalAddresses { get; }
-            public abstract string LocalPorts { get; }
-            public abstract string Name { get; }
-            public abstract int Profiles { get; }
-            public abstract int Protocol { get; }
-            public abstract string RemoteAddresses { get; }
-            public abstract string RemotePorts { get; }
+            public abstract string ApplicationName { get; }
+            public abstract string ApplicationShortName { get; }
             public abstract string ServiceName { get; }
+            public abstract NET_FW_ACTION_ Action { get; }
+            public abstract bool Enabled { get; } //Flags & FW_RULE_FLAGS_ACTIVE
+            public abstract bool EdgeTraversal { get; } //Flags & FW_RULE_FLAGS_ROUTEABLE_ADDRS_TRAVERSE
+            public abstract string Grouping { get; } //Really: EmbeddedContext
 
-            //FIXME: v2.10?
-            public abstract int EdgeTraversalOptions { get; }
+            //v2.10:
+            public abstract int EdgeTraversalOptions { get; } //EdgeTraversal, Flags & FW_RULE_FLAGS_ROUTEABLE_ADDRS_TRAVERSE_DEFER_APP, Flags & FW_RULE_FLAGS_ROUTEABLE_ADDRS_TRAVERSE_DEFER_USER
 
-            // For metro apps (v2.20)
-            public abstract string AppPkgId { get; }
-            //public abstract string Security { get; }
-            public abstract string LUOwn { get; }
+            //v2.20:
             //public abstract string LUAuth { get; }
-            //public abstract string EmbedCtxt { get; }
+            public abstract string AppPkgId { get; }
+            public abstract string LUOwn { get; }
 
-            // For Windows 10 Creators Update (v2.27)
-            //public abstract string Defer { get; }
+            //v2.24:
+            //public abstract string Security { get; }
 
             //FIXME: Need to parse: (RA42=) RmtIntrAnet
 
             private ImageSource _icon = null;
+
+            public event PropertyChangedEventHandler PropertyChanged;
+
             public ImageSource Icon
             {
                 get
                 {
                     if (_icon == null)
                     {
-                        _icon = IconHelper.GetIcon(this.ApplicationName); //FIXME: This is now expanded... Is that a problem?!?
+                        UpdateIcon();
                     }
 
                     return _icon;
                 }
+                private set
+                {
+                    if (_icon != value)
+                    {
+                        _icon = value;
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
+                    }
+                }
+            }
+
+            private async void UpdateIcon()
+            {
+                Icon = await IconHelper.GetIconAsync(this.ApplicationName); //FIXME: This is now expanded... Is that a problem?!?
             }
 
             public string ProfilesStr { get { return getProfile(this.Profiles); } }
@@ -142,35 +164,36 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
                 return FirewallHelper.GetProfileAsText(profile_type);
             }
 
-            public bool ApplyIndirect(bool isTemp)
-            {
-                string actionString;
-                switch (Action)
-                {
-                    case NET_FW_ACTION_.NET_FW_ACTION_ALLOW:
-                        actionString = "A";
-                        break;
+            //public bool ApplyIndirect(bool isTemp)
+            //{
+            //    string actionString;
+            //    switch (Action)
+            //    {
+            //        case NET_FW_ACTION_.NET_FW_ACTION_ALLOW:
+            //            actionString = "A";
+            //            break;
 
-                    case NET_FW_ACTION_.NET_FW_ACTION_BLOCK:
-                        actionString = "B";
-                        break;
+            //        case NET_FW_ACTION_.NET_FW_ACTION_BLOCK:
+            //            actionString = "B";
+            //            break;
 
-                    default:
-                        throw new Exception("Unknown action type: " + Action.ToString());
-                }
-                if (isTemp)
-                {
-                    actionString = "T";
-                }
-                string param = Convert.ToBase64String(Encoding.Unicode.GetBytes(String.Format(indParamFormat, Name, ApplicationName, AppPkgId, LUOwn, ServiceName, Protocol, RemoteAddresses, RemotePorts, LocalPorts, Profiles, actionString)));
-                return ProcessHelper.getProcessFeedback(WFNRuleManagerEXE, param, true, isTemp);
-            }
+            //        default:
+            //            throw new Exception("Unknown action type: " + Action.ToString());
+            //    }
+            //    if (isTemp)
+            //    {
+            //        actionString = "T";
+            //    }
+            //    string param = Convert.ToBase64String(Encoding.Unicode.GetBytes(String.Format(indParamFormat, Name, ApplicationName, AppPkgId, LUOwn, ServiceName, Protocol, RemoteAddresses, RemotePorts, LocalPorts, Profiles, actionString)));
+            //    return ProcessHelper.getProcessFeedback(WFNRuleManagerEXE, args: param, runas: true, dontwait: isTemp);
+            //}
 
             public abstract bool Apply(bool isTemp);
         }
 
         public class WSHRule : Rule
         {
+            //Based on [MS-GPFAS] ABNF Grammar:
             private ILookup<string, string> parsed;
 
             private Version version;
@@ -190,6 +213,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             {
                 get
                 {
+                    //@@@ "ByPass"
                     return parsed["action"].FirstOrDefault() == "Block" ? NET_FW_ACTION_.NET_FW_ACTION_BLOCK : NET_FW_ACTION_.NET_FW_ACTION_ALLOW;
                 }
             }
@@ -198,9 +222,18 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             {
                 get
                 {
-                    return parsed["app"].FirstOrDefault();
+                    return FileHelper.GetFriendlyPath(parsed["app"].FirstOrDefault());
                 }
             }
+
+            public override string ApplicationShortName
+            {
+                get
+                {
+                    return System.IO.Path.GetFileName(ApplicationName);
+                }
+            }
+
 
             public override string AppPkgId
             {
@@ -470,7 +503,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
 
                     if (Protocol != -1)
                     {
-                        firewallRule.Protocol = normalizeProtocol(Protocol);
+                        firewallRule.Protocol = (int)normalizeProtocol(Protocol);
                     }
 
                     if (!String.IsNullOrEmpty(LocalPorts))
@@ -543,6 +576,13 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
 
                     }
                     return _applicationName;
+                }
+            }
+            public override string ApplicationShortName
+            {
+                get
+                {
+                    return (ApplicationName != null ? System.IO.Path.GetFileName(ApplicationName) : String.Empty);
                 }
             }
 
@@ -658,8 +698,17 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
 
         public class CustomRule : Rule
         {
+            public enum CustomRuleAction
+            {
+                [Description("Allow")]
+                A,
+                [Description("Block")]
+                B
+            }
+
             public override NET_FW_ACTION_ Action { get; }
             public override string ApplicationName { get; }
+            public override string ApplicationShortName { get; }
             public override string AppPkgId { get; }
             public override string Description { get; }
             public override NET_FW_RULE_DIRECTION_ Direction { get; }
@@ -718,7 +767,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
 
                     if (Protocol != -1)
                     {
-                        firewallRule.Protocol = normalizeProtocol(Protocol);
+                        firewallRule.Protocol = (int)normalizeProtocol(Protocol);
                     }
 
                     if (!String.IsNullOrEmpty(LocalPorts))
@@ -768,12 +817,15 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
                 return false;
             }
 
-            public CustomRule(string ruleName, string currentPath, string currentAppPkgId, string localUserOwner, string[] services, int protocol, string target, string targetPort, string localport, int profiles, string action) : this(ruleName, currentPath, currentAppPkgId, localUserOwner, services != null ? String.Join(",", services) : null, protocol, target, targetPort, localport, profiles, action)
+            public CustomRule(string ruleName, string currentPath, string currentAppPkgId, string localUserOwner, string[] services, int protocol, string target, string targetPort, string localport
+                , int profiles, CustomRuleAction action)
+                : this(ruleName, currentPath, currentAppPkgId, localUserOwner, (services != null ? String.Join(",", services) : null), protocol, target, targetPort, localport, profiles, action)
             {
                 //Chained to the constructor below!
             }
 
-            public CustomRule(string ruleName, string currentPath, string currentAppPkgId, string localUserOwner, string services, int protocol, string target, string targetPort, string localport, int profiles, string action)
+            public CustomRule(string ruleName, string currentPath, string currentAppPkgId, string localUserOwner, string services, int protocol, string target
+                , string targetPort, string localport, int profiles, CustomRuleAction action)
             {
                 Name = ruleName;
                 ApplicationName = currentPath;
@@ -787,11 +839,11 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
                 Profiles = profiles;
                 switch (action)
                 {
-                    case "A":
+                    case CustomRuleAction.A:
                         Action = NET_FW_ACTION_.NET_FW_ACTION_ALLOW;
                         break;
 
-                    case "B":
+                    case CustomRuleAction.B:
                         Action = NET_FW_ACTION_.NET_FW_ACTION_BLOCK;
                         break;
 
@@ -836,9 +888,54 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             return Enum.GetName(typeof(NET_FW_PROFILE_TYPE2_), type);
         }
 
+        public static bool IsEventAccepted(EventLogEntry entry)
+        {
+            var instanceId = entry.InstanceId;
+
+            // https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/audit-filtering-platform-connection
+            return
+                instanceId == 5157 // block connection
+                || instanceId == 5152 // drop packet
+                                      // Cannot parse this event: || instanceId == 5031 
+                || instanceId == 5150
+                || instanceId == 5151
+                || instanceId == 5154
+                || instanceId == 5155
+                || instanceId == 5156;
+        }
+
+        public static string getEventInstanceIdAsString(long eventId)
+        {
+            // https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/audit-filtering-platform-connection
+            string reason = "Block: {0} ";
+            switch (eventId)
+            {
+                case 5157:
+                    return string.Format(reason, "connection");
+                case 5152:
+                    return string.Format(reason, "packet droped");
+                case 5031:
+                    return string.Format(reason, "app connection"); //  Firewall blocked an application from accepting incoming connections on the network.
+                case 5150:
+                    return string.Format(reason, "packet");
+                case 5151:
+                    return string.Format(reason, "packet (other FW)");
+                case 5154:
+                    return "Allow: listen";
+                case 5155:
+                    return string.Format(reason, "listen");
+                case 5156:
+                    return "Allow: connection";
+                default:
+                    return "[UNKNOWN] eventId:" + eventId.ToString();
+            }
+        }
+
         public static string getProtocolAsString(int protocol)
         {
             //These are the IANA protocol numbers.
+            // Source: https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
+            // TODO: Add all the others and use an array?
             switch (protocol)
             {
                 case 1:
@@ -853,6 +950,12 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
                 case (int)NET_FW_IP_PROTOCOL_.NET_FW_IP_PROTOCOL_UDP: //17
                     return "UDP";
 
+                case 40:
+                    return "IL"; // IL Transport protocol
+
+                case 42:
+                    return "SDRP"; // Source Demand Routing Protocol
+
                 case 47:
                     return "GRE"; //Used by PPTP, for example.
 
@@ -862,9 +965,12 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
                 case 136:
                     return "UDPLite";
 
+                case 36:
+                    return "XTP";
+
                 default:
                     LogHelper.Warning("Unknown protocol type: " + protocol.ToString());
-                    return "Unknown";
+                    return protocol >= 0 ? protocol.ToString() : "Unknown";
             }
         }
 
@@ -872,15 +978,15 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
         /// Converts the protocol integer to its NET_FW_IP_PROTOCOL_ representation.
         /// </summary>
         /// <returns></returns>
-        public static int normalizeProtocol(int protocol)
+        public static NET_FW_IP_PROTOCOL_ normalizeProtocol(int protocol)
         {
             try
             {
-                return (int)(NET_FW_IP_PROTOCOL_)protocol;
+                return (NET_FW_IP_PROTOCOL_)protocol;
             }
             catch
             {
-                return (int)NET_FW_IP_PROTOCOL_.NET_FW_IP_PROTOCOL_ANY;
+                return NET_FW_IP_PROTOCOL_.NET_FW_IP_PROTOCOL_ANY;
             }
         }
 
@@ -991,8 +1097,8 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             }
 
             var ret = firewallPolicy.Rules.Cast<INetFwRule>()
-                                       .Select(r => new FwRule(r))
-                                       .Concat(wshRulesCache);
+                                          .Select(r => new FwRule(r))
+                                          .Concat(wshRulesCache);
 
             if (!AlsoGetInactive)
             {
@@ -1039,7 +1145,6 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             return ret;
         }
 
-
         private static bool RuleMatches(Rule r, string path, IEnumerable<string> svc, int protocol, string localport, string target, string remoteport, string appPkgId, string LocalUserOwner, int currentProfile)
         {
             //Note: This outputs *really* a lot, so use the if-statement to filter!
@@ -1056,24 +1161,106 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
                 LogHelper.Debug(r.AppPkgId + " <--> " + appPkgId + "   " + (String.IsNullOrEmpty(r.AppPkgId) || (r.AppPkgId == appPkgId)).ToString());
                 LogHelper.Debug(r.LUOwn + " <--> " + LocalUserOwner + "   " + (String.IsNullOrEmpty(r.LUOwn) || (r.LUOwn == LocalUserOwner)).ToString());
             }*/
-            bool ret = r.Enabled
-                       && (((r.Profiles & currentProfile) != 0) || ((r.Profiles & (int)NET_FW_PROFILE_TYPE2_.NET_FW_PROFILE2_ALL) != 0))
-                       && ((String.IsNullOrEmpty(r.ApplicationName) || StringComparer.CurrentCultureIgnoreCase.Compare(r.ApplicationName, path) == 0))
-                       && ((String.IsNullOrEmpty(r.ServiceName) || (svc.Any() && (r.ServiceName == "*")) || svc.Contains(r.ServiceName, StringComparer.CurrentCultureIgnoreCase)))
-                       && (r.Protocol == (int)NET_FW_IP_PROTOCOL_.NET_FW_IP_PROTOCOL_ANY || r.Protocol == protocol)
-                       && CheckRuleAddresses(r.RemoteAddresses, target)
-                       && CheckRulePorts(r.RemotePorts, remoteport)
-                       && CheckRulePorts(r.LocalPorts, localport)
-                       //&& r.EdgeTraversal == //@
-                       //&& r.Interfaces == //@
-                       //&& r.LocalAddresses //@
-                       && (String.IsNullOrEmpty(r.AppPkgId) || (r.AppPkgId == appPkgId))
-                       && (String.IsNullOrEmpty(r.LUOwn) || (r.LUOwn == LocalUserOwner))
-                       ;
+            return r.Enabled
+                     && (((r.Profiles & currentProfile) != 0) || ((r.Profiles & (int)NET_FW_PROFILE_TYPE2_.NET_FW_PROFILE2_ALL) != 0))
+                     && ((String.IsNullOrEmpty(r.ApplicationName) || StringComparer.CurrentCultureIgnoreCase.Compare(r.ApplicationName, path) == 0))
+                     && ((String.IsNullOrEmpty(r.ServiceName) || (svc.Any() && (r.ServiceName == "*")) || svc.Contains(r.ServiceName, StringComparer.CurrentCultureIgnoreCase)))
+                     && (r.Protocol == (int)NET_FW_IP_PROTOCOL_.NET_FW_IP_PROTOCOL_ANY || r.Protocol == protocol)
+                     && CheckRuleAddresses(r.RemoteAddresses, target)
+                     && CheckRulePorts(r.RemotePorts, remoteport)
+                     && CheckRulePorts(r.LocalPorts, localport)
+                     //&& r.EdgeTraversal == //@
+                     //&& r.Interfaces == //@
+                     //&& r.LocalAddresses //@
+                     && (String.IsNullOrEmpty(r.AppPkgId) || (r.AppPkgId == appPkgId))
+                     && (String.IsNullOrEmpty(r.LUOwn) || (r.LUOwn == LocalUserOwner))
+                     ;
+        }
+
+
+        class SimpleEventRuleCompare : IEqualityComparer<FirewallHelper.Rule>
+        {
+            public bool Equals(Rule x, Rule y)
+            {
+                // Two items are equal if their keys are equal.
+                return x.Name == y.Name;
+            }
+
+            public int GetHashCode(Rule obj)
+            {
+                return obj.Name.GetHashCode();
+            }
+        }
+
+        /// <summary>
+        /// Get the rules matching an eventlog item taking process appPkgId and svcName into account.
+        /// </summary>
+        /// <param name="path">Executable path</param>
+        /// <param name="target">Target IP or *</param>
+        /// <param name="targetPort">Target port or *</param>
+        /// <param name="blockOnly">Filter for block only rules</param>
+        /// <param name="outgoingOnly">Filter for outgoing rules only</param>
+        /// <returns></returns>
+        public static IEnumerable<Rule> GetMatchingRulesForEvent(int pid, string path, string target, string targetPort, bool blockOnly = true, bool outgoingOnly = false)
+        {
+            String appPkgId = (pid > 0) ? ProcessHelper.getAppPkgId(pid) : String.Empty;
+            int currentProfile = GetCurrentProfile();
+            string svcName = "*";
+            path = path ?? "";
+            if (pid > 0 && path.EndsWith("svchost.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                // get the scvName associated with svchost.exe
+                string cLine = ProcessHelper.getCommandLineFromProcessWMI(pid);
+                if (cLine != null)
+                {
+                    svcName = cLine.Split(new string[] { " -s " }, StringSplitOptions.None).Last().Split(' ').First();
+                }
+            }
+
+            String exeName = System.IO.Path.GetFileName(path);
+            LogHelper.Debug($"\nGetMatchingRulesForEvent: path={exeName}, svcName={svcName}, pid={pid}, target={target} targetPort={targetPort}, blockOnly={blockOnly}, outgoingOnly={outgoingOnly}");
+
+            //IEnumerable<Rule> ret = GetRules(AlsoGetInactive: false).Distinct(new SimpleEventRuleCompare()).Where(r => r.Enabled && RuleMatchesEvent(r, currentProfile, appPkgId, svcName, path, target, targetPort));
+            IEnumerable<Rule> ret = GetRules(AlsoGetInactive: false).Where(r =>
+            {
+                return RuleMatchesEvent(r, currentProfile, appPkgId, svcName, path, target, targetPort);
+            });
+            if (blockOnly)
+            {
+                ret = ret.Where(r => r.Action == NET_FW_ACTION_.NET_FW_ACTION_BLOCK);
+            }
+            if (outgoingOnly)
+            {
+                ret = ret.Where(r => r.Direction == NET_FW_RULE_DIRECTION_.NET_FW_RULE_DIR_OUT);
+            }
 
             return ret;
         }
 
+        public static bool RuleMatchesEvent(Rule r, int currentProfile, string appPkgId, string svcName, string path, string target = "*", string remoteport = "*")
+        {
+            string friendlyPath = String.IsNullOrWhiteSpace(path) ? path : FileHelper.GetFriendlyPath(path);
+            string ruleFriendlyPath = String.IsNullOrWhiteSpace(r.ApplicationName) ? r.ApplicationName : FileHelper.GetFriendlyPath(r.ApplicationName);
+            bool ret = r.Enabled
+                       && (((r.Profiles & currentProfile) != 0) || ((r.Profiles & (int)NET_FW_PROFILE_TYPE2_.NET_FW_PROFILE2_ALL) != 0))
+                       && (String.IsNullOrEmpty(ruleFriendlyPath) || ruleFriendlyPath.Equals(friendlyPath, StringComparison.OrdinalIgnoreCase))
+                       && CheckRuleAddresses(r.RemoteAddresses, target)
+                       && CheckRulePorts(r.RemotePorts, remoteport)
+                       && (String.IsNullOrEmpty(r.AppPkgId) || (r.AppPkgId == appPkgId))
+                       && (String.IsNullOrEmpty(r.ServiceName) || (svcName.Any() && (r.ServiceName == "*")) || svcName.Equals(r.ServiceName, StringComparison.OrdinalIgnoreCase))
+                       ;
+            if (ret && LogHelper.isDebugEnabled())
+            {
+                LogHelper.Debug("Found enabled " + r.ActionStr + " " + r.DirectionStr + " Rule '" + r.Name + "'");
+                LogHelper.Debug("\t" + r.Profiles.ToString() + " <--> " + currentProfile.ToString() + " : " + (((r.Profiles & currentProfile) != 0) || ((r.Profiles & (int)NET_FW_PROFILE_TYPE2_.NET_FW_PROFILE2_ALL) != 0)).ToString());
+                LogHelper.Debug("\t" + ruleFriendlyPath + " <--> " + friendlyPath + " : " + ((String.IsNullOrEmpty(ruleFriendlyPath) || ruleFriendlyPath.Equals(friendlyPath, StringComparison.OrdinalIgnoreCase)).ToString()));
+                LogHelper.Debug("\t" + r.RemoteAddresses + " <--> " + target + " : " + CheckRuleAddresses(r.RemoteAddresses, target).ToString());
+                LogHelper.Debug("\t" + r.RemotePorts + " <--> " + remoteport + " : " + CheckRulePorts(r.RemotePorts, remoteport).ToString());
+                LogHelper.Debug("\t" + r.AppPkgId + " <--> " + appPkgId + "  : " + (String.IsNullOrEmpty(r.AppPkgId) || (r.AppPkgId == appPkgId)).ToString());
+                LogHelper.Debug("\t" + r.ServiceName + " <--> " + svcName + " : " + ((String.IsNullOrEmpty(r.ServiceName) || svcName.Equals(r.ServiceName, StringComparison.OrdinalIgnoreCase))).ToString());
+            }
+            return ret;
+        }
 
         private static bool CheckRuleAddresses(string ruleAddresses, string checkedAddress)
         {
@@ -1089,6 +1276,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             {
                 //FIXME: Handle:
                 //FIXME: See: https://technet.microsoft.com/en-us/aa365366
+                //FW_ADDRESS_KEYWORD:
                 //"Defaultgateway"
                 //"DHCP"
                 //"DNS"
@@ -1116,6 +1304,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
                 }
                 //FIXME: Handle:
                 //FIXME: See: https://msdn.microsoft.com/en-us/library/ff719847.aspx
+                //FW_PORT_KEYWORD:
                 //RPC
                 //RPC-EPMap
                 //Teredo
@@ -1170,7 +1359,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             return String.Join(", ", ret, 0, i);
         }
 
-        public class FirewallStatusWrapper
+        public class FirewallStatusWrapper : INotifyPropertyChanged
         {
             private static Dictionary<bool, string> _actions = new Dictionary<bool, string>{
                 { true, "Block" },
@@ -1194,27 +1383,389 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             private Status privateOutStatus = Status.DISABLED;
             private Status domainOutStatus = Status.DISABLED;
             private Status publicOutStatus = Status.DISABLED;
+            private bool _privateIsEnabled;
+            private bool _privateIsInBlocked;
+            private bool _privateIsOutBlocked;
+            private bool _privateIsOutAllowed;
+            private bool _privateIsInAllowed;
+            private bool _privateIsInBlockedNotif;
+            private bool _privateIsOutBlockedNotif;
+            private bool _publicIsEnabled;
+            private bool _publicIsInBlocked;
+            private bool _publicIsOutBlocked;
+            private bool _publicIsOutAllowed;
+            private bool _publicIsInAllowed;
+            private bool _publicIsInBlockedNotif;
+            private bool _publicIsOutBlockedNotif;
+            private bool _domainIsEnabled;
+            private bool _domainIsInBlocked;
+            private bool _domainIsOutBlocked;
+            private bool _domainIsOutAllowed;
+            private bool _domainIsInAllowed;
+            private bool _domainIsInBlockedNotif;
+            private bool _domainIsOutBlockedNotif;
 
-            public bool PrivateIsEnabled { get; set; }
-            public bool PrivateIsInBlocked { get; set; }
-            public bool PrivateIsOutBlocked { get; set; }
-            public bool PrivateIsOutAllowed { get; set; }
-            public bool PrivateIsInBlockedNotif { get; set; }
-            public bool PrivateIsOutBlockedNotif { get; set; }
+            public bool PrivateIsEnabled
+            {
+                get => _privateIsEnabled;
+                set
+                {
+                    if (value == _privateIsEnabled) return;
+                    _privateIsEnabled = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsEnabled));
+                }
+            }
 
-            public bool PublicIsEnabled { get; set; }
-            public bool PublicIsInBlocked { get; set; }
-            public bool PublicIsOutBlocked { get; set; }
-            public bool PublicIsOutAllowed { get; set; }
-            public bool PublicIsInBlockedNotif { get; set; }
-            public bool PublicIsOutBlockedNotif { get; set; }
+            public bool PrivateIsInBlocked
+            {
+                get => _privateIsInBlocked;
+                set
+                {
+                    if (value == _privateIsInBlocked) return;
+                    _privateIsInBlocked = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsInBlocked));
+                }
+            }
 
-            public bool DomainIsEnabled { get; set; }
-            public bool DomainIsInBlocked { get; set; }
-            public bool DomainIsOutBlocked { get; set; }
-            public bool DomainIsOutAllowed { get; set; }
-            public bool DomainIsInBlockedNotif { get; set; }
-            public bool DomainIsOutBlockedNotif { get; set; }
+            public bool PrivateIsOutBlocked
+            {
+                get => _privateIsOutBlocked;
+                set
+                {
+                    if (value == _privateIsOutBlocked) return;
+                    _privateIsOutBlocked = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsOutBlocked));
+                }
+            }
+
+            public bool PrivateIsOutAllowed
+            {
+                get => _privateIsOutAllowed;
+                set
+                {
+                    if (value == _privateIsOutAllowed) return;
+                    _privateIsOutAllowed = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsOutAllowed));
+                }
+            }
+
+            public bool PrivateIsInAllowed
+            {
+                get => _privateIsInAllowed;
+                set
+                {
+                    if (value == _privateIsInAllowed) return;
+                    _privateIsInAllowed = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsInAllowed));
+                }
+            }
+
+            public bool PrivateIsInBlockedNotif
+            {
+                get => _privateIsInBlockedNotif;
+                set
+                {
+                    if (value == _privateIsInBlockedNotif) return;
+                    _privateIsInBlockedNotif = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsInBlockedNotif));
+                }
+            }
+
+            public bool PrivateIsOutBlockedNotif
+            {
+                get => _privateIsOutBlockedNotif;
+                set
+                {
+                    if (value == _privateIsOutBlockedNotif) return;
+                    _privateIsOutBlockedNotif = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsOutBlockedNotif));
+                }
+            }
+
+            public bool PublicIsEnabled
+            {
+                get => _publicIsEnabled;
+                set
+                {
+                    if (value == _publicIsEnabled) return;
+                    _publicIsEnabled = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsEnabled));
+                }
+            }
+
+            public bool PublicIsInBlocked
+            {
+                get => _publicIsInBlocked;
+                set
+                {
+                    if (value == _publicIsInBlocked) return;
+                    _publicIsInBlocked = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsInBlocked));
+                }
+            }
+
+            public bool PublicIsOutBlocked
+            {
+                get => _publicIsOutBlocked;
+                set
+                {
+                    if (value == _publicIsOutBlocked) return;
+                    _publicIsOutBlocked = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsOutBlocked));
+                }
+            }
+
+            public bool PublicIsOutAllowed
+            {
+                get => _publicIsOutAllowed;
+                set
+                {
+                    if (value == _publicIsOutAllowed) return;
+                    _publicIsOutAllowed = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsOutAllowed));
+                }
+            }
+
+            public bool PublicIsInAllowed
+            {
+                get => _publicIsInAllowed;
+                set
+                {
+                    if (value == _publicIsInAllowed) return;
+                    _publicIsInAllowed = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsInAllowed));
+                }
+            }
+
+            public bool PublicIsInBlockedNotif
+            {
+                get => _publicIsInBlockedNotif;
+                set
+                {
+                    if (value == _publicIsInBlockedNotif) return;
+                    _publicIsInBlockedNotif = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsInBlockedNotif));
+                }
+            }
+
+            public bool PublicIsOutBlockedNotif
+            {
+                get => _publicIsOutBlockedNotif;
+                set
+                {
+                    if (value == _publicIsOutBlockedNotif) return;
+                    _publicIsOutBlockedNotif = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsOutBlockedNotif));
+                }
+            }
+
+            public bool DomainIsEnabled
+            {
+                get => _domainIsEnabled;
+                set
+                {
+                    if (value == _domainIsEnabled) return;
+                    _domainIsEnabled = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsEnabled));
+                }
+            }
+
+            public bool DomainIsInBlocked
+            {
+                get => _domainIsInBlocked;
+                set
+                {
+                    if (value == _domainIsInBlocked) return;
+                    _domainIsInBlocked = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsInBlocked));
+                }
+            }
+
+            public bool DomainIsOutBlocked
+            {
+                get => _domainIsOutBlocked;
+                set
+                {
+                    if (value == _domainIsOutBlocked) return;
+                    _domainIsOutBlocked = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsOutBlocked));
+                }
+            }
+
+            public bool DomainIsOutAllowed
+            {
+                get => _domainIsOutAllowed;
+                set
+                {
+                    if (value == _domainIsOutAllowed) return;
+                    _domainIsOutAllowed = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsOutAllowed));
+                }
+            }
+
+            public bool DomainIsInAllowed
+            {
+                get => _domainIsInAllowed;
+                set
+                {
+                    if (value == _domainIsInAllowed) return;
+                    _domainIsInAllowed = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsInAllowed));
+                }
+            }
+
+            public bool DomainIsInBlockedNotif
+            {
+                get => _domainIsInBlockedNotif;
+                set
+                {
+                    if (value == _domainIsInBlockedNotif) return;
+                    _domainIsInBlockedNotif = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsInBlockedNotif));
+                }
+            }
+
+            public bool DomainIsOutBlockedNotif
+            {
+                get => _domainIsOutBlockedNotif;
+                set
+                {
+                    if (value == _domainIsOutBlockedNotif) return;
+                    _domainIsOutBlockedNotif = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(AllIsOutBlockedNotif));
+                }
+            }
+
+            public bool? AllIsEnabled
+            {
+                get
+                {
+                    if (PublicIsEnabled == PrivateIsEnabled && PrivateIsEnabled == DomainIsEnabled)
+                    {
+                        return PublicIsEnabled;
+                    }
+
+                    return null;
+                }
+                set
+                {
+                    if (value != null)
+                    {
+                        var bValue = value.Value;
+                        PublicIsEnabled = bValue;
+                        PrivateIsEnabled = bValue;
+                        DomainIsEnabled = bValue;
+                        OnPropertyChanged(nameof(PublicIsEnabled));
+                        OnPropertyChanged(nameof(PrivateIsEnabled));
+                        OnPropertyChanged(nameof(DomainIsEnabled));
+                    }
+                }
+            }
+
+            public bool AllIsInBlocked
+            {
+                get => PublicIsInBlocked && PrivateIsInBlocked && DomainIsInBlocked;
+                set
+                {
+                    PublicIsInBlocked = value;
+                    PrivateIsInBlocked = value;
+                    DomainIsInBlocked = value;
+                    OnPropertyChanged(nameof(PublicIsInBlocked));
+                    OnPropertyChanged(nameof(PrivateIsInBlocked));
+                    OnPropertyChanged(nameof(DomainIsInBlocked));
+                }
+            }
+
+            public bool AllIsInAllowed
+            {
+                get => PublicIsInAllowed && PrivateIsInAllowed && DomainIsInAllowed;
+                set
+                {
+                    PublicIsInAllowed = value;
+                    PrivateIsInAllowed = value;
+                    DomainIsInAllowed = value;
+                    OnPropertyChanged(nameof(PublicIsInAllowed));
+                    OnPropertyChanged(nameof(PrivateIsInAllowed));
+                    OnPropertyChanged(nameof(DomainIsInAllowed));
+                }
+            }
+
+            public bool AllIsOutBlocked
+            {
+                get => PublicIsOutBlocked && PrivateIsOutBlocked && DomainIsOutBlocked;
+                set
+                {
+                    PublicIsOutBlocked = value;
+                    PrivateIsOutBlocked = value;
+                    DomainIsOutBlocked = value;
+                    OnPropertyChanged(nameof(PublicIsOutBlocked));
+                    OnPropertyChanged(nameof(PrivateIsOutBlocked));
+                    OnPropertyChanged(nameof(DomainIsOutBlocked));
+                }
+            }
+
+            public bool AllIsOutAllowed
+            {
+                get => PublicIsOutAllowed && PrivateIsOutAllowed && DomainIsOutAllowed;
+                set
+                {
+                    PublicIsOutAllowed = value;
+                    PrivateIsOutAllowed = value;
+                    DomainIsOutAllowed = value;
+                    OnPropertyChanged(nameof(PublicIsOutAllowed));
+                    OnPropertyChanged(nameof(PrivateIsOutAllowed));
+                    OnPropertyChanged(nameof(DomainIsOutAllowed));
+                }
+            }
+
+            public bool AllIsInBlockedNotif
+            {
+                get => PublicIsInBlockedNotif && PrivateIsInBlockedNotif && DomainIsInBlockedNotif;
+                set
+                {
+                    PublicIsInBlockedNotif = value;
+                    PrivateIsInBlockedNotif = value;
+                    DomainIsInBlockedNotif = value;
+                    OnPropertyChanged(nameof(PublicIsInBlockedNotif));
+                    OnPropertyChanged(nameof(PrivateIsInBlockedNotif));
+                    OnPropertyChanged(nameof(DomainIsInBlockedNotif));
+                }
+            }
+
+            public bool AllIsOutBlockedNotif
+            {
+                get => PublicIsOutBlockedNotif && PrivateIsOutBlockedNotif && DomainIsOutBlockedNotif;
+                set
+                {
+                    PublicIsOutBlockedNotif = value;
+                    PrivateIsOutBlockedNotif = value;
+                    DomainIsOutBlockedNotif = value;
+                    OnPropertyChanged(nameof(PublicIsOutBlockedNotif));
+                    OnPropertyChanged(nameof(PrivateIsOutBlockedNotif));
+                    OnPropertyChanged(nameof(DomainIsOutBlockedNotif));
+                }
+            }
 
             public string CurrentProfile { get { return GetCurrentProfileAsText(); } }
 
@@ -1290,6 +1841,14 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
                 firewallPolicy.DefaultInboundAction[NET_FW_PROFILE_TYPE2_.NET_FW_PROFILE2_DOMAIN] = DomainIsInBlockedNotif || DomainIsInBlocked ? NET_FW_ACTION_.NET_FW_ACTION_BLOCK : NET_FW_ACTION_.NET_FW_ACTION_ALLOW;
                 firewallPolicy.DefaultOutboundAction[NET_FW_PROFILE_TYPE2_.NET_FW_PROFILE2_DOMAIN] = DomainIsOutBlockedNotif || DomainIsOutBlocked ? NET_FW_ACTION_.NET_FW_ACTION_BLOCK : NET_FW_ACTION_.NET_FW_ACTION_ALLOW;
                 firewallPolicy.NotificationsDisabled[NET_FW_PROFILE_TYPE2_.NET_FW_PROFILE2_DOMAIN] = !DomainIsInBlockedNotif;
+            }
+
+            public event PropertyChangedEventHandler PropertyChanged;
+
+            [NotifyPropertyChangedInvocator]
+            protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
             }
         }
     }

@@ -351,6 +351,11 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers.IPHelpers
                 return ret;
             }*/
 
+            if (row.OwningPid == 0)
+            {
+                return Owner.System;
+            }
+
             IntPtr buffer = IntPtr.Zero;
             try
             {
@@ -359,13 +364,13 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers.IPHelpers
                 if ((retn != NO_ERROR) && (retn != ERROR_INSUFFICIENT_BUFFER))
                 {
                     //Cannot get owning module for this connection
-                    LogHelper.Info("Unable to get the connection owner.");
+                    LogHelper.Info("Unable to get the connection owner: ownerPid=" + row.OwningPid +" remoteAdr=" + row.RemoteAddress + ":" + row.RemotePort);
                     return ret;
                 }
                 if (buffSize == 0)
                 {
                     //No buffer? Probably means we can't retrieve any information about this connection; skip it
-                    LogHelper.Info("Unable to get the connection owner.");
+                    LogHelper.Info("Unable to get the connection owner (no buffer).");
                     return ret;
                 }
                 buffer = Marshal.AllocHGlobal((int)buffSize);

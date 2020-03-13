@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using Wokhan.WindowsFirewallNotifier.Common;
 using Wokhan.WindowsFirewallNotifier.Common.Helpers;
 using Wokhan.WindowsFirewallNotifier.Console.Helpers;
+using Messages = Wokhan.WindowsFirewallNotifier.Common.Properties.Resources;
 
 namespace Wokhan.WindowsFirewallNotifier.Console.UI.Pages
 {
@@ -20,22 +21,18 @@ namespace Wokhan.WindowsFirewallNotifier.Console.UI.Pages
         public string LastMessage
         {
             get { return _lastMessage; }
-            private set { _lastMessage = value; NotifyPropertyChanged("LastMessage"); }
+            private set { _lastMessage = value; NotifyPropertyChanged(nameof(LastMessage)); }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
-        private void NotifyPropertyChanged(string caller)
+        private void NotifyPropertyChanged(string propertyName)
         {
-            if (PropertyChanged != null)
-            {
-                PropertyChanged(this, new PropertyChangedEventArgs(caller));
-            }
+            PropertyChanged.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
         public Status()
         {
             InitializeComponent();
-
             init();
         }
 
@@ -63,12 +60,22 @@ namespace Wokhan.WindowsFirewallNotifier.Console.UI.Pages
             {
                 InstallHelper.EnableProgram(true, callback);
             }
-            else if (isInstalled && (!status.PrivateIsEnabled || !status.PrivateIsOutBlockedNotif) && (!status.PublicIsEnabled || !status.PublicIsOutBlockedNotif) && (!status.DomainIsEnabled || !status.DomainIsOutBlockedNotif))
+            else if (isInstalled)
             {
-                InstallHelper.RemoveProgram(true, callback);
+                InstallHelper.UninstallCheck(!isEnabled(status), !isOutBlockNotifierEnabled(status), callback);
             }
 
             init();
+        }
+
+        private static bool isEnabled(FirewallHelper.FirewallStatusWrapper status)
+        {
+            return status.PrivateIsEnabled || status.DomainIsEnabled || status.PublicIsEnabled;
+        }
+
+        private static bool isOutBlockNotifierEnabled(FirewallHelper.FirewallStatusWrapper status)
+        {
+            return status.PrivateIsOutBlockedNotif || status.PublicIsOutBlockedNotif || status.DomainIsOutBlockedNotif;
         }
 
         private void btnRevert_Click(object sender, RoutedEventArgs e)
@@ -101,6 +108,7 @@ namespace Wokhan.WindowsFirewallNotifier.Console.UI.Pages
             }
 
             stackOptions.DataContext = status;
+            messsageInfoPanel.DataContext = this;
         }
 
         private void callback(bool isSuccess, string details)

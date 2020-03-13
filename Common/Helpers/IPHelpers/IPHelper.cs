@@ -82,11 +82,15 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
 
         public class Owner
         {
-            public string ModuleName;
-            public string ModulePath;
+            public static Owner System { get; } = new Owner() { ModuleName = "System", ModulePath = "System" };
+                
+            public string ModuleName { get; private set; }
+            public string ModulePath { get; private set; }
 
-            private BitmapSource _icon = null;
-            public BitmapSource Icon { get { return _icon = _icon ?? IconHelper.GetIcon(ModulePath, true); } }
+            public Owner()
+            {
+
+            }
 
             public Owner(TCPIP_OWNER_MODULE_BASIC_INFO inf)
             {
