@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-	<TargetFramework>netcoreapp3.1</TargetFramework>
+	<TargetFramework>net5.0-windows</TargetFramework>
     <AssemblyName>Wokhan.WindowsFirewallNotifier.Console.Tests</AssemblyName>
     <RootNamespace>Wokhan.WindowsFirewallNotifier.Console.Tests</RootNamespace>
     <Description>Windows Firewall Notifier - Common Tests</Description>
@@ -14,11 +14,10 @@
     <DefineConstants>TRACE;DEBUG</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="log4net" Version="2.0.8" />
     <PackageReference Include="MaxMind.GeoIP2">
-      <Version>3.1.0</Version>
+      <Version>3.2.0</Version>
     </PackageReference>
-    <PackageReference Include="Microsoft.CodeAnalysis.FxCopAnalyzers">
+    <!--<PackageReference Include="Microsoft.CodeAnalysis.FxCopAnalyzers">
       <Version>2.9.8</Version>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -27,13 +26,8 @@
       <Version>2.9.8</Version>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    </PackageReference>-->
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.5.0" />
-    <PackageReference Include="Microsoft.NetFramework.Analyzers">
-      <Version>2.9.8</Version>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
     <PackageReference Include="NUnit" Version="3.12.0" />
     <PackageReference Include="NUnit.Console" Version="3.11.1" />
     <PackageReference Include="NUnit.Extension.VSProjectLoader" Version="3.8.0" />
@@ -41,6 +35,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Wokhan.Core" Version="0.9.2-alpha" />
   </ItemGroup>
   <ItemGroup>
     <WCFMetadata Include="Connected Services\" />
@@ -54,9 +49,6 @@
   <ItemGroup>
     <Reference Include="Interop.NetFwTypeLib">
       <HintPath>..\Interop\Interop.NetFwTypeLib.dll</HintPath>
-    </Reference>
-    <Reference Include="Wokhan.Core">
-      <HintPath>..\TempSharedLib\Wokhan.Core.dll</HintPath>
     </Reference>
   </ItemGroup>
   <!-- <Import Project="$(VSToolsPath)\TeamTest\Microsoft.TestTools.targets" Condition="Exists('$(VSToolsPath)\TeamTest\Microsoft.TestTools.targets')" />

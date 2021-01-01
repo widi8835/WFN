@@ -3,7 +3,8 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-      DataContext="{Binding RelativeSource={RelativeSource Self}}"
+      xmlns:ext="clr-namespace:Wokhan.UI.Xaml.Extensibility;assembly=Wokhan.UI" 
+      DataContext="{Binding RelativeSource={x:Static RelativeSource.Self}}"
       mc:Ignorable="d"
       d:DesignHeight="400" d:DesignWidth="800"
       Title="Firewall rules">
@@ -21,44 +22,21 @@
             </Border.Style>
             <TextBlock Text="The Windows embedded firewall is currently disabled. The following rules will not apply until you enable it back, either using WFN notifications options or the standard Windows firewall ones." />
         </Border>
-        <Border Style="{StaticResource ToolBarPanel}">
+        <ContentControl Style="{StaticResource ToolBarPanel}">
             <Grid>
-                <WrapPanel>
-                    <Button x:Name="btnRemoveRule" Click="btnRemoveRule_Click">
-                        <Grid>
-                            <Path Fill="OrangeRed" Data="{StaticResource Image_Delete}"/>
-                            <TextBlock Margin="20,0,0,0" Text="Remove" />
-                        </Grid>
-                    </Button>
-                    <Button x:Name="btnLocate" Click="btnLocate_Click">
-                        <Grid>
-                            <Path Fill="CornflowerBlue" Data="{StaticResource Image_Locate}"/>
-                            <TextBlock Margin="20,0,0,0" Text="Locate" />
-                        </Grid>
-                    </Button>
-                    <Button x:Name="btnStartAdvConsole" Click="btnStartAdvConsole_Click">
-                        <Grid>
-                            <Image Source="/WFN;component/Resources/Images/btnOpenConsole.Image.png" HorizontalAlignment="Left" Height="16"/>
-                            <TextBlock Margin="20,0,0,0" Text="Adv. console" />
-                        </Grid>
-                    </Button>
-                </WrapPanel>
-                <WrapPanel HorizontalAlignment="Right">
-                    <Path Fill="Orange" Data="{StaticResource Image_Filter}"/>
-                    <Label Content="Filter:" />
-                    <TextBox x:Name="txtFilter" Width="150" Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" />
-                    <Path Height="14" Fill="Green" Data="{StaticResource Image_Show}"/>
-                    <Label Content="Show:" />
-                    <ComboBox IsEditable="False" Width="100" SelectedValue="{Binding TypeFilter}" DisplayMemberPath="Value" SelectedValuePath="Key" ItemsSource="{Binding TypeFilters}" />
-                    <Button x:Name="btnRefresh" Click="btnRefresh_Click">
-                        <Path Fill="#FFA2A2FF" Data="{StaticResource Image_Refresh}"/>
-                    </Button>
-                    <ToggleButton x:Name="btnHelp">
-                        <Path Fill="Chocolate" Data="{StaticResource Image_Help}"/>
-                    </ToggleButton>
-                </WrapPanel>
+                <StackPanel>
+                    <Button Content="Remove" x:Name="btnRemoveRule" Click="btnRemoveRule_Click" ext:CustomAdorner.Image="{StaticResource Image_Delete}"/>
+                    <Button Content="Locate" x:Name="btnLocate" Click="btnLocate_Click" ext:CustomAdorner.Image="{StaticResource Image_Locate}"/>
+                    <Button Content="Adv. console" ext:CustomAdorner.Image="/WFN;component/Resources/Images/btnOpenConsole.Image.png" x:Name="btnStartAdvConsole" Click="btnStartAdvConsole_Click" />
+                </StackPanel>
+                <StackPanel HorizontalAlignment="Right">
+                    <TextBox ext:CustomAdorner.HeaderImage="{StaticResource Image_Filter}" ext:CustomAdorner.Header="Filter:" x:Name="txtFilter" Width="150" Text="{Binding Filter, UpdateSourceTrigger=PropertyChanged}" />
+                    <ComboBox ext:CustomAdorner.PreserveTemplate="true" ext:CustomAdorner.Header="Show:" ext:CustomAdorner.HeaderImage="{StaticResource Image_Show}" SelectedValue="{Binding TypeFilter}" DisplayMemberPath="Value" SelectedValuePath="Key" ItemsSource="{Binding TypeFilters}" />
+                    <Button Content="Refresh" x:Name="btnRefresh" Click="btnRefresh_Click" ext:CustomAdorner.Image="{StaticResource Image_Refresh}"/>
+                    <Label Style="{StaticResource HelpButtonStyle}" ToolTip="This screen displays all Windows firewall rules.&#10;The ones prefixed by 'Custom rules' have been created by Windows Firewall Notifier.&#10;You can not manually create rules, but you can remove useless ones if required." />
+                </StackPanel>
             </Grid>
-        </Border>
+        </ContentControl>
         <Grid>
             <DataGrid AlternatingRowBackground="Gainsboro" BorderThickness="0" x:Name="gridRules" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ColumnWidth="*" GridLinesVisibility="None" SelectionMode="Extended" IsReadOnly="True" AutoGenerateColumns="False" HeadersVisibility="Column">
                 <DataGrid.CellStyle>
@@ -88,9 +66,6 @@
                     <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding Enabled, Mode=OneTime}" />
                 </DataGrid.Columns>
             </DataGrid>
-            <Border Style="{StaticResource InfoBlock}">
-                <TextBlock>This screen displays all Windows firewall rules. The ones prefixed by "Custom rules" have been created by Windows Firewall Notifier. You can not manually create rules, but you can remove useless ones if required.</TextBlock>
-            </Border>
         </Grid>
     </DockPanel>
 </Page>

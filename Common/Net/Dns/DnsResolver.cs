@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Net;
 using System.Threading.Tasks;
+
 using Wokhan.Collections;
-using Wokhan.WindowsFirewallNotifier.Common.Helpers;
+using Wokhan.WindowsFirewallNotifier.Common.Logging;
 
 /// <summary>
 /// DnsResolver resolves IP addesses to IPHostEntry records asynchronously and caches them in a dictionary.
@@ -24,7 +25,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Net.DNS
         public static readonly ObservableDictionary<IPAddress, CachedIPHostEntry> CachedIPHostEntryDict = new ObservableDictionary<IPAddress, CachedIPHostEntry>();
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "<Pending>")]
-        public static async Task<bool?> ResolveIpAddress(string ip, Action<CachedIPHostEntry>? callback = null)
+        public static async Task<bool?> ResolveIpAddressAsync(string ip, Action<CachedIPHostEntry>? callback = null)
         {
             return await Task.Run(() =>
             {

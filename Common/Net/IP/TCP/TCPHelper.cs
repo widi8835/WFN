@@ -2,7 +2,8 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using Wokhan.WindowsFirewallNotifier.Common.Helpers;
+
+using Wokhan.WindowsFirewallNotifier.Common.Logging;
 
 namespace Wokhan.WindowsFirewallNotifier.Common.Net.IP
 {
@@ -146,7 +147,6 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Net.IP
 
         public static void EnsureStatsAreEnabled(MIB_TCPROW row)
         {
-
             var rwS = Marshal.SizeOf<TCP_ESTATS_BANDWIDTH_RW_v0>();
             IntPtr rw = Marshal.AllocHGlobal(rwS);
             Marshal.StructureToPtr(new TCP_ESTATS_BANDWIDTH_RW_v0() { EnableCollectionInbound = TCP_BOOLEAN_OPTIONAL.TcpBoolOptEnabled, EnableCollectionOutbound = TCP_BOOLEAN_OPTIONAL.TcpBoolOptEnabled }, rw, true);

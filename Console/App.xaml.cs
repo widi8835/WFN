@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Windows;
+
 using Wokhan.WindowsFirewallNotifier.Common.Config;
 using Wokhan.WindowsFirewallNotifier.Common.Helpers;
+using Wokhan.WindowsFirewallNotifier.Common.Logging;
+using Wokhan.WindowsFirewallNotifier.Common.Processes;
 
 namespace Wokhan.WindowsFirewallNotifier.Console
 {
@@ -43,18 +46,10 @@ namespace Wokhan.WindowsFirewallNotifier.Console
             {
                 Resources["ConsoleSizeWidth"] = Convert.ToDouble(Settings.Default.ConsoleSizeWidth);
             }
-            else
-            {
-                Resources["ConsoleSizeWidth"] = 900d;
-            }
 
             if (Settings.Default.ConsoleSizeHeight > 600)
             {
                 Resources["ConsoleSizeHeight"] = Convert.ToDouble(Settings.Default.ConsoleSizeHeight);
-            }
-            else
-            {
-                Resources["ConsoleSizeHeight"] = 600d;
             }
         }
 

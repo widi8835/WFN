@@ -1,6 +1,8 @@
 ﻿using NetFwTypeLib;
+
 using System;
-using Wokhan.WindowsFirewallNotifier.Common.Helpers;
+
+using Wokhan.WindowsFirewallNotifier.Common.Logging;
 
 namespace Wokhan.WindowsFirewallNotifier.Common.Net.WFP
 {
@@ -52,6 +54,9 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Net.WFP
 
                 case 36:
                     return "XTP";
+
+                case 38:
+                    return "IDPR-CMTP";
 
                 default:
                     LogHelper.Warning("Unknown protocol type: " + protocol.ToString());

@@ -13,9 +13,9 @@ using System.Windows;
 using Wokhan.WindowsFirewallNotifier.Common.Net.WFP;
 using Wokhan.WindowsFirewallNotifier.Common.Net.IP;
 using System.IO;
-using Wokhan.WindowsFirewallNotifier.Common.Processes;
+using Wokhan.WindowsFirewallNotifier.Common.Logging;
 
-namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
+namespace Wokhan.WindowsFirewallNotifier.Common.Processes
 {
     public static partial class ProcessHelper
     {
@@ -37,13 +37,21 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             {
                 using var searcher = new ManagementObjectSearcher("SELECT ProcessId, Name, ExecutablePath, CommandLine FROM Win32_Process");
                 using var results = searcher.Get();
+                // Looks like the first cast to uint is required for this to work (pretty weird if you ask me).
                 previousCache = results.Cast<ManagementObject>().ToDictionary(r => (int)(uint)r["ProcessId"], r => new[] { (string)r["Name"], (string)r["ExecutablePath"], (string)r["CommandLine"] });
+            }
+
+            if (!previousCache.ContainsKey(owningPid))
+            {
+                using var searcher = new ManagementObjectSearcher($"SELECT ProcessId, Name, ExecutablePath, CommandLine FROM Win32_Process WHERE ProcessId = {owningPid}");
+                using var r = searcher.Get().Cast<ManagementObject>().FirstOrDefault();
+                previousCache.Add(owningPid, new[] { (string)r["Name"], (string)r["ExecutablePath"], (string)r["CommandLine"] });
             }
 
             return previousCache[owningPid];
         }
 
-        public static IEnumerable<string>? GetAllServices(int pid)
+        public static IEnumerable<string>? GetAllServices(uint pid)
         {
             IntPtr hServiceManager = NativeMethods.OpenSCManager(null, null, (uint)(NativeMethods.SCM_ACCESS.SC_MANAGER_CONNECT | NativeMethods.SCM_ACCESS.SC_MANAGER_ENUMERATE_SERVICE));
             if (hServiceManager == IntPtr.Zero)
@@ -130,7 +138,8 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             }
         }
 
-        public static void GetService(int pid, int threadid, string path, int protocol, int localport, string target, int remoteport, out string[] svc, out string[] svcdsc, out bool unsure)
+        // TODO: Commenting out as unused (replaced by better methods by fellow contributors :-) ). To be deleted if everything is working as expected.
+        /*public static void GetService(uint pid, int threadid, string path, int protocol, int localport, string target, int remoteport, out string[] svc, out string[] svcdsc, out bool unsure)
         {
             // Try to lookup details about connection to localport.
             //@wokhan: how is this supposed to work since connection is blocked by firewall??
@@ -165,7 +174,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
                 Process? p;
                 try
                 {
-                    p = Process.GetProcessById(pid);
+                    p = Process.GetProcessById((int)pid);
                 }
                 catch (ArgumentException)
                 {
@@ -240,7 +249,6 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             // And if it still fails, fall backs to the most ugly way ever I am not able to get rid of :-P
             // Retrieves corresponding existing rules
             LogHelper.Info("Trying to retrieve service name through rule information.");
-            int profile = FirewallHelper.GetCurrentProfile();
             var cRules = FirewallHelper.GetMatchingRules(path, GetAppPkgId(pid), protocol, target, remoteport.ToString(), localport.ToString(), svc, GetLocalUserOwner(pid), false, false)
                                        .Select(r => r.ServiceName)
                                        .Distinct()
@@ -268,23 +276,24 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             }
 
             return;
-        }
+        }*/
+
         /// <summary>
         /// Retrieve information about all services by pid
         /// </summary>
         /// <returns></returns>
-        public static Dictionary<int, ServiceInfoResult> GetAllServicesByPidWMI()
+        public static Dictionary<uint, ServiceInfoResult> GetAllServicesByPidWMI()
         {
             // use WMI "Win32_Service" query to get service names by pid
             // https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/win32-service
-            Dictionary<int, ServiceInfoResult> dict = new Dictionary<int, ServiceInfoResult>();
+            Dictionary<uint, ServiceInfoResult> dict = new Dictionary<uint, ServiceInfoResult>();
             using (var searcher = new ManagementObjectSearcher("SELECT ProcessId, Name, DisplayName, PathName FROM Win32_Service WHERE ProcessId != 0"))
             {
                 using var results = searcher.Get();
                 foreach (var r in results)
                 {
                     //Console.WriteLine($"{r["processId"]} {r["Name"]}");
-                    int pid = (int)(uint)r["ProcessId"];
+                    var pid = (uint)r["ProcessId"];
                     if (pid > 0 && !dict.ContainsKey(pid))
                     {
                         dict.Add(pid, new ServiceInfoResult(pid, (string)r["Name"], (string)r["DisplayName"], (string)r["PathName"]));
@@ -319,7 +328,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             }
         }
 
-        public static string GetAppPkgId(int pid)
+        public static string GetAppPkgId(uint pid)
         {
             if (Environment.OSVersion.Version <= new Version(6, 2))
             {
@@ -384,7 +393,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
             }
         }
 
-        public static string GetLocalUserOwner(int pid)
+        public static string GetLocalUserOwner(uint pid)
         {
             //Based on: https://bytes.com/topic/c-sharp/answers/225065-how-call-win32-native-api-gettokeninformation-using-c
             IntPtr hProcess = NativeMethods.OpenProcess(NativeMethods.ProcessAccessFlags.QueryInformation, false, (uint)pid);
@@ -523,7 +532,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.Helpers
         /// </summary>
         /// <param name="processId"></param>
         /// <returns>command-line or null</returns>
-        public static string? GetCommandLineFromProcessWMI(int processId)
+        public static string? GetCommandLineFromProcessWMI(uint processId)
         {
             try
             {

@@ -5,7 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using Wokhan.WindowsFirewallNotifier.Common.Helpers;
+
+using Wokhan.WindowsFirewallNotifier.Common.Logging;
 
 namespace Wokhan.WindowsFirewallNotifier.Common.IO.Files
 {
@@ -52,7 +53,7 @@ namespace Wokhan.WindowsFirewallNotifier.Common.IO.Files
         /// </summary>
         /// <param name="p"></param>
         /// <returns></returns>
-        public static string GetFriendlyPath(string p)
+        public static string ResolvePath(string p)
         {
             if (string.IsNullOrEmpty(p))
             {

@@ -5,7 +5,8 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
-using Wokhan.WindowsFirewallNotifier.Common.Helpers;
+
+using Wokhan.WindowsFirewallNotifier.Common.Logging;
 
 namespace Wokhan.WindowsFirewallNotifier.Common.IO.Files
 {
@@ -20,8 +21,10 @@ namespace Wokhan.WindowsFirewallNotifier.Common.IO.Files
         /// </summary>
         /// <param name="path"></param>
         /// <returns></returns>
-        private static BitmapSource GetIconFromPath(string path = "")
+        private static BitmapSource GetIconFromPath(string? path)
         {
+            path = path ?? string.Empty;
+
             BitmapSource? bitmap;
             // need to lock before trying to get the value else we get duplicates because of concurrency
             lock (procIconLstLocker)
@@ -46,26 +49,24 @@ namespace Wokhan.WindowsFirewallNotifier.Common.IO.Files
                                 break;
 
                             default:
-                                // Using FileHelper.GetFriendlyPath(path) to cover paths like \device\harddiskvolume1\program files etc.
-                                var friendlyPath = PathResolver.GetFriendlyPath(path);
                                 if (!path.Contains(@"\", StringComparison.Ordinal))
                                 {
-                                    LogHelper.Debug($"Skipped extract icon: '{friendlyPath}' because path has no directory info.");
+                                    LogHelper.Debug($"Skipped extract icon: '{path}' because path has no directory info.");
                                     ic = SystemIcons.Application;
                                     break;
                                 }
                                 try
                                 {
-                                    ic = Icon.ExtractAssociatedIcon(friendlyPath);
+                                    ic = Icon.ExtractAssociatedIcon(path);
                                 }
                                 catch (ArgumentException)
                                 {
-                                    LogHelper.Debug("Unable to extract icon: " + friendlyPath + (!friendlyPath.Equals(path) ? " (" + path + ")" : ""));
+                                    LogHelper.Debug("Unable to extract icon: " + path);
                                     ic = SystemIcons.Application;
                                 }
                                 catch (System.IO.FileNotFoundException) //Undocumented exception
                                 {
-                                    LogHelper.Debug("Unable to extract icon: " + friendlyPath + (!friendlyPath.Equals(path) ? " (" + path + ")" : ""));
+                                    LogHelper.Debug("Unable to extract icon: " + path);
                                     ic = SystemIcons.Warning;
                                 }
                                 break;
@@ -80,17 +81,14 @@ namespace Wokhan.WindowsFirewallNotifier.Common.IO.Files
                     }
                     finally
                     {
-                        if (ic != null)
-                        {
-                            ic.Dispose();
-                        }
+                        ic?.Dispose();
                     }
                 }
             }
             return bitmap;
         }
 
-        public static async Task<BitmapSource> GetIconAsync(string path = "")
+        public static async Task<BitmapSource> GetIconAsync(string? path = "")
         {
             return await Task.Run(() => GetIconFromPath(path)).ConfigureAwait(false);
         }

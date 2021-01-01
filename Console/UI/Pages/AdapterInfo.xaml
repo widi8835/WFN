@@ -1,90 +1,64 @@
-﻿<Page x:Class="Wokhan.WindowsFirewallNotifier.Console.UI.Pages.AdapterInfo"
+﻿<pages:TimerBasedPage 
+    xmlns:pages="clr-namespace:Wokhan.WindowsFirewallNotifier.Console.UI.Pages"
+    x:Class="Wokhan.WindowsFirewallNotifier.Console.UI.Pages.AdapterInfo"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
-      xmlns:local="clr-namespace:Wokhan.WindowsFirewallNotifier.Console.UI.Pages"
-      xmlns:Converters="clr-namespace:Wokhan.WindowsFirewallNotifier.Console.Helpers.BindingConverters"
+      xmlns:Converters="clr-namespace:Wokhan.WindowsFirewallNotifier.Console.UI.BindingConverters"
       mc:Ignorable="d" 
       d:DesignHeight="600" d:DesignWidth="600"
       Title="AdapterInfo"
-      xmlns:dummydata="clr-namespace:Wokhan.WindowsFirewallNotifier.Console.Helpers.DummyData"
-      DataContext="{Binding RelativeSource={RelativeSource Self}}">
+      xmlns:dummydata="clr-namespace:Wokhan.WindowsFirewallNotifier.Console.ViewModels"
+      DataContext="{Binding RelativeSource={x:Static RelativeSource.Self}}">
     <Page.Resources>
         <Converters:SecondsToDateTimeConverter x:Key="secondsConverter" />
     </Page.Resources>
     <DockPanel>
-        <Border Style="{StaticResource ToolBarPanel}">
+        <ContentControl Style="{StaticResource ToolBarPanel}">
             <Grid>
-                <WrapPanel HorizontalAlignment="Left">
-                    <ToggleButton IsChecked="{Binding IsTrackingEnabled}">
-                        <Grid>
-                            <Path HorizontalAlignment="Left" Width="10" Stretch="Uniform" Fill="Green">
-                                <Path.Style>
-                                    <Style TargetType="Path">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsTrackingEnabled, FallbackValue=True}" Value="True">
-                                                <Setter Property="Data" Value="{StaticResource Image_Stop}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsTrackingEnabled}" Value="False">
-                                                <Setter Property="Data" Value="{StaticResource Image_Start}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Path.Style>
-                            </Path>
-                            <Label Margin="15,0,0,0" Content="Auto-refresh" />
-                        </Grid>
-                    </ToggleButton>
-                </WrapPanel>
-                <WrapPanel HorizontalAlignment="Right">
-                    <Border BorderBrush="White" Background="White" BorderThickness="0" CornerRadius="8" Padding="5,2" Margin="0,0,5,0">
-                        <WrapPanel>
-                            <Path Fill="#FFA2A2FF" Data="{StaticResource Image_UpdateRate}"/>
-                            <Label Margin="4,0" Content="Update rate:" />
-                            <ComboBox IsEditable="False" Width="70" ItemsSource="{Binding Intervals, StringFormat='\{0\}s'}" SelectedValue="{Binding Interval}" />
-                        </WrapPanel>
-                    </Border>
-                    <ToggleButton x:Name="btnHelp">
-                        <Path Fill="Chocolate" Data="{StaticResource Image_Help}"/>
-                    </ToggleButton>
-                </WrapPanel>
+                <ToggleButton HorizontalAlignment="Left" Content="Auto-refresh" IsChecked="{Binding IsTrackingEnabled}" Style="{StaticResource AutoTrackButton}" />
+                <StackPanel HorizontalAlignment="Right">
+                    <ComboBox Style="{StaticResource AutoTrackRefresh}" ItemsSource="{Binding Intervals, StringFormat='\{0\}s'}" SelectedValue="{Binding Interval}" />
+                    <Label Style="{StaticResource HelpButtonStyle}" ToolTip="This page displays extended information about all adapters on this computer, including virtual devices or interfaces." />
+                </StackPanel>
             </Grid>
-        </Border>
+        </ContentControl>
         <Grid>
             <ScrollViewer>
-                <ItemsControl ItemsSource="{Binding}" DataContext="{Binding AllInterfaces}" d:DataContext="{d:DesignInstance Type=dummydata:AdapterDummy,IsDesignTimeCreatable=True,CreateList=True}">
+                <ItemsControl ItemsSource="{Binding}" DataContext="{Binding AllInterfaces}" d:DataContext="{d:DesignInstance Type=dummydata:ExposedInterfaceViewDummy,IsDesignTimeCreatable=True,CreateList=True}" Grid.IsSharedSizeScope="True">
                     <ItemsControl.ItemTemplate>
-                        <DataTemplate>
+                        <DataTemplate DataType="ExposedInterfaceView">
                             <Expander>
                                 <Expander.Header>
-                                    <Grid Width="{Binding ActualWidth, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=Expander}}">
+                                    <Grid Width="{Binding ActualWidth,RelativeSource={RelativeSource AncestorType=Expander}}">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="Auto" SharedSizeGroup="status" />
+                                            <ColumnDefinition Width="*" SharedSizeGroup="name"/>
                                             <ColumnDefinition Width="Auto" SharedSizeGroup="bandwidthUP" />
                                             <ColumnDefinition Width="Auto" SharedSizeGroup="bandwidthDOWN" />
                                         </Grid.ColumnDefinitions>
-                                        <Path HorizontalAlignment="Left" Height="16" Stretch="Uniform" Data="{StaticResource Image_Adapter}">
-                                            <Path.Style>
-                                                <Style TargetType="Path">
-                                                    <Setter Property="Fill" Value="Red" />
+                                        <ContentControl>
+                                            <ContentControl.Style>
+                                                <Style TargetType="ContentControl">
+                                                    <Setter Property="Content" Value="{StaticResource Image_Adapter_Red}" />
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Information.OperationalStatus}" Value="Up">
-                                                            <Setter Property="Fill" Value="Green" />
+                                                            <Setter Property="Content" Value="{StaticResource Image_Adapter_Green}" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
-                                            </Path.Style>
-                                        </Path>
-                                        <TextBlock Margin="20,0,0,0" Text="{Binding Information.Name}" />
-                                        <WrapPanel HorizontalAlignment="Left" Grid.Column="1" Margin="0,0,10,0">
-                                            <Path Margin="0,0,5,0" Height="16" Stretch="Uniform" Fill="Red" Data="{StaticResource Image_DataUp}"/>
-                                            <TextBlock Text="{Binding FormattedBytesSent}" Margin="0,0,10,0" />
-                                        </WrapPanel>
-                                        <WrapPanel HorizontalAlignment="Left" Grid.Column="2" Margin="0,0,40,0">
-                                            <Path Margin="0,0,5,0" Height="16" Stretch="Uniform" Fill="Green" Data="{StaticResource Image_DataDown}"/>
-                                            <TextBlock Text="{Binding FormattedBytesReceived}" />
-                                        </WrapPanel>
+                                            </ContentControl.Style>
+                                        </ContentControl>
+                                        <TextBlock Grid.Column="1" Margin="20,0,0,0" Text="{Binding Information.Name}" />
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Grid.Column="2" Margin="20,0,10,0">
+                                            <ContentControl Margin="0,0,5,0" Content="{StaticResource Image_DataUp}"/>
+                                            <TextBlock Text="{Binding Statistics.BytesSent,Converter={StaticResource unitFormatter}}" Margin="0,0,10,0" />
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Grid.Column="3" Margin="10,0,10,0">
+                                            <ContentControl Margin="0,0,5,0" Content="{StaticResource Image_DataDown}"/>
+                                            <TextBlock Text="{Binding Statistics.BytesReceived,Converter={StaticResource unitFormatter}}" />
+                                        </StackPanel>
                                     </Grid>
                                 </Expander.Header>
                                 <StackPanel>
@@ -181,9 +155,6 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </ScrollViewer>
-            <Border Style="{StaticResource InfoBlock}">
-                <TextBlock>The Adapter information page displays extended information about all adapters on this computer, including virtual devices or interfaces.</TextBlock>
-            </Border>
         </Grid>
     </DockPanel>
-</Page>
+</pages:TimerBasedPage>

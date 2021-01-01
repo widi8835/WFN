@@ -1,0 +1,15 @@
+﻿<UserControl x:Class="Wokhan.WindowsFirewallNotifier.Console.UI.Controls.BandwidthGraph"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:oxy="http://oxyplot.org/wpf"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" x:Name="me"
+             d:DesignHeight="450" d:DesignWidth="800" ClipToBounds="True">
+    <Grid>
+        <oxy:PlotView x:Name="chart" Model="{Binding Model}" PanCursor="ScrollWE" DataContext="{Binding ElementName=me}" />
+        <StackPanel VerticalAlignment="Top" HorizontalAlignment="Right" Orientation="Horizontal">
+            <Button Style="{StaticResource RoundedButton}" ToolTip="Reset zoom / pan" Content="{StaticResource Image_Refresh}" Click="ResetZoom" />
+        </StackPanel>
+    </Grid>
+</UserControl>

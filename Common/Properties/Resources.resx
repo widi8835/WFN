@@ -210,7 +210,7 @@ This application has NOT been totally disabled.</value>
     <value>WFN_version.txt</value>
   </data>
   <data name="FW_TITLE" xml:space="preserve">
-    <value>Windows Firewall has blocked an outgoing connection</value>
+    <value>{0} outgoing connection(s) blocked</value>
   </data>
   <data name="MSG_LOG_FAILED" xml:space="preserve">
     <value>Failed to write to log file. Please make sure the log file is not in use by another program.</value>
@@ -309,7 +309,7 @@ This application has NOT been totally disabled.</value>
     <value>Note: if you don't know what a profile is all about, the private one usually refers to your home network, while the public one is for public places (restaurant, hotels...). A domain profile is usually for workplaces.</value>
   </data>
   <data name="Status_FooterRemark" xml:space="preserve">
-    <value>* WFN is notified everytime an outgoing connection is blocked by the windows firewall. Notifications are shown in Notifier or alternatively in the security log menu. The recommended setting is "Block and prompt" for all profiles.</value>
+    <value>* WFN is notified everytime an outgoing connection is blocked by the windows firewall. Notifications are shown in Notifier or alternatively in the security log menu. Enabling this option is recommended since you wouldn't get notified at all otherwise.</value>
   </data>
   <data name="Status_WindowsFirewallGlobalStatus" xml:space="preserve">
     <value>Windows firewall global status</value>
@@ -354,5 +354,14 @@ You may need to create a rule for WFN in the Notifier to unblock it.</value>
   <assembly alias="System.Windows.Forms" name="System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
   <data name="Notifier" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\resources\notifier.ico;System.Drawing.Icon, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="FW_TITLE_NO_CONNECTION" xml:space="preserve">
+    <value>No blocked connections detected.</value>
+  </data>
+  <data name="ActivityWindow_OrientationHorizontal" xml:space="preserve">
+    <value>Switch to horizontal orientation</value>
+  </data>
+  <data name="ActivityWindow_OrientationVertical" xml:space="preserve">
+    <value>Switch to vertical orientation</value>
   </data>
 </root>
