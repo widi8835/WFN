@@ -1,16 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using Wokhan.WindowsFirewallNotifier.Common;
 using System.Linq;
 using Wokhan.WindowsFirewallNotifier.Common.Helpers;
-using System.Windows.Threading;
 using Wokhan.WindowsFirewallNotifier.Console.Helpers;
+using Wokhan.WindowsFirewallNotifier.Common.Config;
 
 namespace Wokhan.WindowsFirewallNotifier.Console.UI.Pages
 {
@@ -19,18 +17,7 @@ namespace Wokhan.WindowsFirewallNotifier.Console.UI.Pages
     /// </summary>
     public partial class Options : Page
     {
-        private Dictionary<string, Brush> _colors = typeof(Colors).GetProperties(BindingFlags.Public | BindingFlags.Static).ToDictionary(c => c.Name, c => (Brush)new SolidColorBrush((Color)c.GetValue(null)));
-        public Dictionary<string, Brush> Colors { get { return _colors; } }
-
-        public SolidColorBrush AccentColor
-        {
-            get { return (SolidColorBrush)Application.Current.Resources["AccentColorBrush"]; }
-            set { Application.Current.Resources["AccentColorBrush"] = value; Settings.Default.AccentColor = value; }
-        }
-
-        public string SharedConfigurationPath { get; set; } = CustomSettingsProvider.SharedConfigurationPath;
-        public string UserConfigurationPath { get; set; } = CustomSettingsProvider.UserConfigurationPath;
-        public string UserLocalConfigurationPath { get; set; } = CustomSettingsProvider.UserLocalConfigurationPath;
+        public Dictionary<string, Brush> Colors { get; } = typeof(Colors).GetProperties(BindingFlags.Public | BindingFlags.Static).ToDictionary(c => c.Name, c => (Brush)new SolidColorBrush((Color)c.GetValue(null)));
 
         public Options()
         {
@@ -41,7 +28,7 @@ namespace Wokhan.WindowsFirewallNotifier.Console.UI.Pages
         {
             Settings.Default.FirstRun = true;   // reset the flag to log os info again once
             Settings.Default.Save();
-            InstallHelper.SetAuditPolConnection(enableSuccess: Settings.Default.AuditPolEnableSuccessEvent, enableFailure:true);
+            InstallHelper.SetAuditPolConnection(enableSuccess: Settings.Default.AuditPolEnableSuccessEvent, enableFailure:true);  // always turn this on for now so that security log and notifier works
         }
 
         private void btnCancel_Click(object sender, RoutedEventArgs e)
@@ -51,11 +38,12 @@ namespace Wokhan.WindowsFirewallNotifier.Console.UI.Pages
 
         private void btnTestNotif_Click(object sender, RoutedEventArgs e)
         {
-            Process.Start(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Notifier.exe"));
+            Process.Start(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Notifier.exe"));
         }
 
         private void btnRestartAdmin_Click(object sender, RoutedEventArgs e)
         {
+            // TODO: @wokhan to be removed for power users?
             ((App)Application.Current).RestartAsAdmin();
         }
 
@@ -69,22 +57,11 @@ namespace Wokhan.WindowsFirewallNotifier.Console.UI.Pages
             Settings.Default.Reset();
             Settings.Default.FirstRun = true;
             Settings.Default.EnableVerboseLogging = false;
-            //Settings.Default.AlwaysRunAs = true;
-        }
-
-        private void txtUserLocalConfigurationPath_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            ProcessHelper.StartShellExecutable("explorer.exe", UserLocalConfigurationPath, true);
         }
 
         private void txtUserConfigurationPath_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            ProcessHelper.StartShellExecutable("explorer.exe", UserConfigurationPath, true);
-        }
-
-        private void txtSharedConfigurationPath_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            ProcessHelper.StartShellExecutable("explorer.exe", SharedConfigurationPath, true);
+            ProcessHelper.StartShellExecutable("explorer.exe", $"\"{Settings.Default.ConfigurationPath}\"", true);
         }
     }
 }
